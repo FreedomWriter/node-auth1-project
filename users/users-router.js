@@ -7,7 +7,7 @@ const restricted = require("../middlewares/restricted");
 
 const router = express.Router();
 
-router.get("/users", async (req, res, next) => {
+router.get("/users", restricted(), async (req, res, next) => {
   try {
     const users = await db.find();
     res.json(users);
@@ -16,11 +16,20 @@ router.get("/users", async (req, res, next) => {
   }
 });
 
-router.post("/login", restricted(), async (req, res, next) => {
+router.post("/login", async (req, res, next) => {
   try {
     const { username, password } = req.body;
     const user = await db.findBy({ username }).first();
-    res.json(user);
+    const passwordValid = await bcrypt.compareSync(password, user.password);
+
+    if (user && passwordValid) {
+      req.session.user = user;
+      res.status(200).json({
+        message: `Welcome ${username}`
+      });
+    } else {
+      res.status(401).json({ message: "You shall not pass!" });
+    }
   } catch (err) {
     next(err);
   }
@@ -33,6 +42,28 @@ router.post("/register", async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+router.get("/restricted", restricted(), async (req, res, next) => {
+  try {
+    res.json({
+      message: "You are authorized"
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/logout", restricted(), (req, res, next) => {
+  req.session.destroy(err => {
+    if (err) {
+      next(err);
+    } else {
+      res.json({
+        message: "You are logged out."
+      });
+    }
+  });
 });
 
 module.exports = router;
